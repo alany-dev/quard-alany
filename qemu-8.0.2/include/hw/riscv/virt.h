@@ -31,6 +31,13 @@
 
 #define TYPE_RISCV_VIRT_MACHINE MACHINE_TYPE_NAME("virt")
 typedef struct RISCVVirtState RISCVVirtState;
+// 生成 类型安全的实例检查和类型转换函数
+/*
+// 拿到通用的虚拟机实例指针
+MachineState *machine = MACHINE(qdev_get_machine());
+// 安全转换为 RISCVVirtState 类型（类型不匹配会触发断言 + 追踪日志）
+RISCVVirtState *s = RISCV_VIRT_MACHINE(machine);
+*/
 DECLARE_INSTANCE_CHECKER(RISCVVirtState, RISCV_VIRT_MACHINE,
                          TYPE_RISCV_VIRT_MACHINE)
 
@@ -40,16 +47,17 @@ typedef enum RISCVVirtAIAType {
     VIRT_AIA_TYPE_APLIC_IMSIC,
 } RISCVVirtAIAType;
 
+// 定义 RISCVVirtState 结构体，包含虚拟机状态和设备信息
 struct RISCVVirtState {
     /*< private >*/
-    MachineState parent;
+    MachineState parent;        // 继承 MachineState
 
     /*< public >*/
     Notifier machine_done;
     DeviceState *platform_bus_dev;
     RISCVHartArrayState soc[VIRT_SOCKETS_MAX];
     DeviceState *irqchip[VIRT_SOCKETS_MAX];
-    PFlashCFI01 *flash[2];
+    PFlashCFI01 *flash[2];      // flash
     FWCfgState *fw_cfg;
 
     int fdt_size;
@@ -59,7 +67,7 @@ struct RISCVVirtState {
     char *oem_id;
     char *oem_table_id;
     OnOffAuto acpi;
-    const MemMapEntry *memmap;
+    const MemMapEntry *memmap;  // 内存映射
 };
 
 enum {
@@ -86,8 +94,8 @@ enum {
 };
 
 enum {
-    UART0_IRQ = 10,
-    RTC_IRQ = 11,
+    UART0_IRQ = 10,                                 // 串口中断号
+    RTC_IRQ = 11,                                   // RTC中断号
     VIRTIO_IRQ = 1, /* 1 to 8 */
     VIRTIO_COUNT = 8,
     PCIE_IRQ = 0x20, /* 32 to 35 */

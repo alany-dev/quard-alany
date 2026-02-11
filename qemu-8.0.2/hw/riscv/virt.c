@@ -74,6 +74,7 @@
 #error "Can't accomodate all IMSIC groups in address space"
 #endif
 
+// 硬件内存映射
 static const MemMapEntry virt_memmap[] = {
     [VIRT_DEBUG] =        {        0x0,         0x100 },
     [VIRT_MROM] =         {     0x1000,        0xf000 },
@@ -1469,8 +1470,10 @@ static void virt_machine_init(MachineState *machine)
         machine->ram);
 
     /* boot rom */
+    // memory_region_init_rom 初始化一个只读存储器区域，通常用于模拟系统的引导只读存储器（ROM）。
     memory_region_init_rom(mask_rom, NULL, "riscv_virt_board.mrom",
                            memmap[VIRT_MROM].size, &error_fatal);
+    // memory_region_add_subregion 将 一个已经初始化好的 MemoryRegion 添加到系统内存中。
     memory_region_add_subregion(system_memory, memmap[VIRT_MROM].base,
                                 mask_rom);
 
@@ -1715,13 +1718,15 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Enable ACPI");
 }
 
+// 定义 virt_machine_typeinfo 结构体
+// 描述 virt 机器类型的信息，包括名称、父类型、类初始化函数、实例初始化函数、实例大小和接口信息。
 static const TypeInfo virt_machine_typeinfo = {
-    .name       = MACHINE_TYPE_NAME("virt"),
-    .parent     = TYPE_MACHINE,
-    .class_init = virt_machine_class_init,
-    .instance_init = virt_machine_instance_init,
-    .instance_size = sizeof(RISCVVirtState),
-    .interfaces = (InterfaceInfo[]) {
+    .name       = MACHINE_TYPE_NAME("virt"),        // 注册板卡，定义名称
+    .parent     = TYPE_MACHINE,                     // 父类名称
+    .class_init = virt_machine_class_init,          // 负责初始化该类型的 “类对象”，设置所有实例共享的属性和行为。(第一次注册该类型时执行一次)
+    .instance_init = virt_machine_instance_init,    // 负责初始化每个 virt 机器实例独有的 “实例对象”，设置实例专属的资源和状态。(每创建一个 virt 机器实例时执行)
+    .instance_size = sizeof(RISCVVirtState),        // 对象大小。如果为0，大小将为父对象的大小
+    .interfaces = (InterfaceInfo[]) {               // 与该类型关联的接口列表
          { TYPE_HOTPLUG_HANDLER },
          { }
     },

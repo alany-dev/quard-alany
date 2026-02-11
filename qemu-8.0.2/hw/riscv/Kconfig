@@ -24,6 +24,7 @@ config OPENTITAN
     select SIFIVE_PLIC
     select UNIMP
 
+# riscv-virt
 config RISCV_VIRT
     bool
     imply PCI_DEVICES
