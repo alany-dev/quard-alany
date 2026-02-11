@@ -22,6 +22,7 @@ struct QuardStarState
 
     /*< public >*/
     RISCVHartArrayState soc[QUARD_STAR_SOCKETS_MAX];
+    PFlashCFI01 *flash;
 };
 
 enum
@@ -29,6 +30,7 @@ enum
     QUARD_STAR_MROM,
     QUARD_STAR_SRAM,
     QUARD_STAR_UART0,
+    QUARD_STAR_FLASH,
     QUARD_STAR_DRAM,
 };
 

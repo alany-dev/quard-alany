@@ -30,10 +30,11 @@ typedef struct MemMapEntry {
 } MemMapEntry;
 */
 static const MemMapEntry quard_star_memmap[] = {
-    [QUARD_STAR_MROM] = {0x0, 0x8000},        // ROM
-    [QUARD_STAR_SRAM] = {0x8000, 0x8000},     // CPU 高速缓存
-    [QUARD_STAR_UART0] = {0x10000000, 0x100}, // UART0 串口
-    [QUARD_STAR_DRAM] = {0x80000000, 0x80},   // DRAM 内存
+    [QUARD_STAR_MROM] = {0x0, 0x8000},            // ROM
+    [QUARD_STAR_SRAM] = {0x8000, 0x8000},         // CPU 高速缓存
+    [QUARD_STAR_UART0] = {0x10000000, 0x100},     // UART0 串口
+    [QUARD_STAR_FLASH] = {0x20000000, 0x2000000}, // Flash 存储
+    [QUARD_STAR_DRAM] = {0x80000000, 0x80},       // DRAM 内存
 };
 
 // 创建CPU
@@ -113,11 +114,47 @@ static void quard_star_memory_create(MachineState *machine)
 
     // MROM（Mask ROM）中生成一段可以在系统复位（Reset）时执行的机器码（Bootloader Stub/Reset Vector）
     riscv_setup_rom_reset_vec(machine, &s->soc[0],
-                              quard_star_memmap[QUARD_STAR_MROM].base, // 目标跳转地址
+                              quard_star_memmap[QUARD_STAR_FLASH].base, // 目标跳转地址
                               quard_star_memmap[QUARD_STAR_MROM].base,  // ROM起始地址
                               quard_star_memmap[QUARD_STAR_MROM].size,  // ROM大小
                               0x0,                                      // kernel_entry
                               0x0);                                     // fdt_load_addr
+}
+
+static void quard_star_flash_create(MachineState *machine)
+{
+#define QUARD_STAR_FLASH_SECTOR_SIZE (256 * KiB)       // 0x40000
+    QuardStarState *s = RISCV_VIRT_MACHINE(machine);   //
+    MemoryRegion *system_memory = get_system_memory(); // 获取全局的系统内存根区域，稍后会将 Flash 挂载到这里。
+    DeviceState *dev = qdev_new(TYPE_PFLASH_CFI01);    // 创建一个新的设备对象，类型为 CFI01 标准的并行 Flash。此时设备已创建但尚未初始化（未 realize）。
+
+    qdev_prop_set_uint64(dev, "sector-length", QUARD_STAR_FLASH_SECTOR_SIZE); // Flash 扇区大小，擦除和写入的最小单位
+    qdev_prop_set_uint8(dev, "width", 4);                                     // 总线宽度 4字节（32位），表示每次访问可以读写4字节数据
+    qdev_prop_set_uint8(dev, "device-width", 2);                              // 单芯片宽度 2 字节。QEMU 模拟两片 16 位的 Flash 芯片组成一个 32 位的设备
+    qdev_prop_set_bit(dev, "big-endian", false);                              // 小端模式，和 RISC-V 架构一致
+    qdev_prop_set_uint16(dev, "id0", 0x89);                                   // 制造商与设备 ID (CFI 查询响应)
+    qdev_prop_set_uint16(dev, "id1", 0x18);
+    qdev_prop_set_uint16(dev, "id2", 0x00);
+    qdev_prop_set_uint16(dev, "id3", 0x00);
+    qdev_prop_set_string(dev, "name", "quard-star.flash0");
+
+    object_property_add_child(OBJECT(s), "quard-star.flash0", OBJECT(dev)); // 将 Flash 设备作为 QuardStarState 的子对象，属性名为 "quard-star.flash0"。QOM Tree记录。
+    object_property_add_alias(OBJECT(s), "pflash0", OBJECT(dev), "drive");  // 添加别名 "pflash0"，指向 Flash 设备的 "drive" 属性，方便在其他地方通过 "pflash0" 来访问 Flash 设备的驱动信息
+
+    s->flash = PFLASH_CFI01(dev);
+    pflash_cfi01_legacy_drive(s->flash, drive_get(IF_PFLASH, 0, 0)); // 处理旧式的驱动连接方式，确保如果有对应的 -drive 参数，它会被正确连接到这个 Flash 设备上。
+
+    hwaddr flashsize = quard_star_memmap[QUARD_STAR_FLASH].size; // 从板级的内存映射表中获取 Flash 的预定大小和基地址。
+    hwaddr flashbase = quard_star_memmap[QUARD_STAR_FLASH].base;
+
+    assert(QEMU_IS_ALIGNED(flashsize, QUARD_STAR_FLASH_SECTOR_SIZE));                  // 确保 Flash 总大小是扇区大小的整数倍（必须对齐）。
+    assert(flashsize / QUARD_STAR_FLASH_SECTOR_SIZE <= UINT32_MAX);                    // 确保块数量没有溢出。
+    qdev_prop_set_uint32(dev, "num-blocks", flashsize / QUARD_STAR_FLASH_SECTOR_SIZE); // 计算总块数（总大小 / 扇区大小）并设置给设备。这是 Flash 大小的最终决定参数。
+    sysbus_realize_and_unref(SYS_BUS_DEVICE(dev), &error_fatal);                       // 关键步骤。这会触发设备的 realize 方法，完成设备的内部初始化。如果失败（error_fatal），QEMU 会直接报错退出。
+
+    // sysbus_mmio_get_region(...) 获取 Flash 设备提供的第 0 号内存区域（即 Flash 的存储空间）。
+    // memory_region_add_subregion 将这块内存区域“粘贴”到系统内存空间的 flashbase 地址处。
+    memory_region_add_subregion(system_memory, flashbase, sysbus_mmio_get_region(SYS_BUS_DEVICE(dev), 0));
 }
 
 // quard-star 初始化各种硬件
@@ -127,6 +164,8 @@ static void quard_star_machine_init(MachineState *machine)
     quard_star_cpu_create(machine);
     //  创建主存
     quard_star_memory_create(machine);
+    // 创建 Flash 存储
+    quard_star_flash_create(machine);
 }
 
 static void quard_star_machine_instance_init(Object *obj)
