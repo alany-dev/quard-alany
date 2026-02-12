@@ -16,13 +16,22 @@
 #include "hw/riscv/numa.h"
 #include "hw/intc/riscv_aclint.h"
 #include "hw/intc/riscv_aplic.h"
+#include "hw/intc/riscv_imsic.h"
+#include "hw/platform-bus.h"
 #include "hw/intc/sifive_plic.h"
+#include "hw/misc/sifive_test.h"
 
 #include "chardev/char.h"
 #include "sysemu/device_tree.h"
 #include "sysemu/sysemu.h"
 #include "sysemu/kvm.h"
 #include "sysemu/tpm.h"
+
+#include "hw/pci/pci.h"
+#include "hw/pci-host/gpex.h"
+#include "hw/display/ramfb.h"
+#include "hw/acpi/aml-build.h"
+#include "qapi/qapi-visit-common.h"
 
 /*
 typedef struct MemMapEntry {
@@ -31,13 +40,16 @@ typedef struct MemMapEntry {
 } MemMapEntry;
 */
 static const MemMapEntry quard_star_memmap[] = {
-    [QUARD_STAR_MROM]  = {       0x0,    0x8000}, // ROM
-    [QUARD_STAR_SRAM]  = {    0x8000,    0x8000}, // CPU 高速缓存
-    [QUARD_STAR_CLINT] = {0x02000000,   0x10000}, // CLINT 定时器和软件中断控制器
-    [QUARD_STAR_PLIC]  = {0x0c000000, 0x4000000}, // PLIC 中断控制器
-    [QUARD_STAR_UART0] = {0x10000000,     0x100}, // UART0 串口
-    [QUARD_STAR_FLASH] = {0x20000000, 0x2000000}, // Flash 存储
-    [QUARD_STAR_DRAM]  = {0x80000000,      0x80}, // DRAM 内存
+    [QUARD_STAR_MROM]  = {       0x0,                                        0x8000}, // ROM
+    [QUARD_STAR_SRAM]  = {    0x8000,                                        0x8000}, // CPU 高速缓存
+    [QUARD_STAR_CLINT] = {0x02000000,                                       0x10000}, // CLINT 定时器和软件中断控制器
+    [QUARD_STAR_PLIC]  = {0x0c000000, QUARD_STAR_PLIC_SIZE(QUARD_STAR_CPUS_MAX * 2)}, // PLIC 中断控制器
+    [QUARD_STAR_UART0] = {0x10000000,                                         0x100}, // UART0 串口
+    [QUARD_STAR_UART1] = {0x10001000,                                         0x100}, // UART1 串口
+    [QUARD_STAR_UART2] = {0x10002000,                                         0x100}, // UART2 串口
+    [QUARD_STAR_RTC]   = {0x10003000,                                        0x1000}, // RTC 实时时钟
+    [QUARD_STAR_FLASH] = {0x20000000,                                     0x2000000}, // Flash 存储
+    [QUARD_STAR_DRAM]  = {0x80000000,                                          0x80}, // DRAM 内存
 };
 
 // 创建CPU
@@ -166,7 +178,7 @@ static void quard_star_plic_create(MachineState *machine)
         base_hartid = riscv_socket_first_hartid(machine, i);
         char *plic_hart_config;
 
-        plic_hart_config = riscv_plic_hart_config_string(machine->smp.cpus);
+        plic_hart_config = riscv_plic_hart_config_string(hart_count);
 
         // 保留 plic 指针
         // 机器中的其他设备（如串口 UART、VirtIO 设备、PCIe 控制器等）产生的硬件中断，都需要连接到 PLIC 的特定引脚（IRQ lines）上。
@@ -174,7 +186,7 @@ static void quard_star_plic_create(MachineState *machine)
                                         plic_hart_config, hart_count, base_hartid,
                                         QUARD_STAR_PLIC_NUM_SOURCES,    // PLIC 支持的中断源数量
                                         QUARD_STAR_PLIC_NUM_PRIORITIES, // PLIC 支持的优先级数量
-                                        QUARD_STAR_PLIC_PROIORITY_BASE, // PLIC 中断优先级
+                                        QUARD_STAR_PLIC_PRIORITY_BASE,  // PLIC 中断优先级
                                         QUARD_STAR_PLIC_PENDING_BASE,   // PLIC 中断挂起
                                         QUARD_STAR_PLIC_ENABLE_BASE,    // PLIC 中断使能
                                         QUARD_STAR_PLIC_ENABLE_STRIDE,  // PLIC 中断使能寄存
@@ -217,6 +229,48 @@ static void quard_star_aclint_create(MachineState *machine)
     }
 }
 
+// 创建三路 UART 串口
+static void quard_star_serial_create(MachineState *machine)
+{
+    // RISCV CPU 访问外设和访问内存的方式是一样的，都是通过读写物理地址实现。
+    // 把 UART 设备的寄存器 挂载 到 系统全局内存空间中，这样 CPU 通过读写对应的物理地址就能访问 UART 了。 
+    MemoryRegion *system_memory = get_system_memory();
+    QuardStarState *s           = RISCV_VIRT_MACHINE(machine);
+
+    serial_mm_init(system_memory,
+                   quard_star_memmap[QUARD_STAR_UART0].base,
+                   0,
+                   qdev_get_gpio_in(DEVICE(s->plic[0]), QUARD_STAR_UART0_IRQ),
+                   399193,
+                   serial_hd(0),
+                   DEVICE_LITTLE_ENDIAN);
+
+    serial_mm_init(system_memory,
+                   quard_star_memmap[QUARD_STAR_UART1].base,
+                   0,
+                   qdev_get_gpio_in(DEVICE(s->plic[0]), QUARD_STAR_UART1_IRQ),
+                   399193,
+                   serial_hd(1),
+                   DEVICE_LITTLE_ENDIAN);
+
+    serial_mm_init(system_memory,
+                   quard_star_memmap[QUARD_STAR_UART2].base,
+                   0,
+                   qdev_get_gpio_in(DEVICE(s->plic[0]), QUARD_STAR_UART2_IRQ),
+                   399193,
+                   serial_hd(2),
+                   DEVICE_LITTLE_ENDIAN);
+}
+
+// 创建 RTC
+static void quard_star_rtc_create(MachineState *machine)
+{
+    QuardStarState *s = RISCV_VIRT_MACHINE(machine);
+    sysbus_create_simple("goldfish_rtc",
+                         quard_star_memmap[QUARD_STAR_RTC].base,
+                         qdev_get_gpio_in(DEVICE(s->plic[0]), QUARD_STAR_RTC_IRQ));
+}
+
 // quard-star 初始化各种硬件
 static void quard_star_machine_init(MachineState *machine)
 {
@@ -230,6 +284,10 @@ static void quard_star_machine_init(MachineState *machine)
     quard_star_plic_create(machine);
     // 创建 RISCV_ACLINT
     quard_star_aclint_create(machine);
+    // 创建 三个 UART 串口
+    quard_star_serial_create(machine);
+    // 创建 RTC 实时时钟
+    quard_star_rtc_create(machine);
 }
 
 static void quard_star_machine_instance_init(Object *obj)

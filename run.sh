@@ -5,6 +5,6 @@ SHELL_FOLDER=$(cd "$(dirname "$0")";pwd)
 # 启动QEMU RISC-V64（无图形界面版）
 $SHELL_FOLDER/output/qemu/bin/qemu-system-riscv64 \
 -M quard-star \
--nographic \
+-monitor stdio \
 -m 1G \
 -smp 8
