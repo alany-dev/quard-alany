@@ -1,0 +1,20 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: false
+IndentCaseLabels: false
+
+SortIncludes: Never
+
+# 注释对齐 & 不截断
+AlignTrailingComments: true
+ReflowComments: false
+ColumnLimit: 0
+
+# 宏定义对齐
+AlignConsecutiveMacros: true
+# 对齐赋值符号 (=)
+AlignConsecutiveAssignments: true
+# 数组内的结构体数值对齐 
+AlignArrayOfStructures: Right
