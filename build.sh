@@ -1,6 +1,13 @@
+#!/bin/bash
+set -e
+
 # 获取当前脚本文件所在的目录
 SHELL_FOLDER=$(cd "$(dirname "$0")";pwd)
 export PATH=$PATH:$SHELL_FOLDER/riscv64-elf-ubuntu-24.04-gcc/bin
+
+if [ ! -d "$SHELL_FOLDER/output" ]; then  
+mkdir $SHELL_FOLDER/output
+fi  
 
 echo "------------------------- 编译qemu---------------------------------------"
 cd qemu-8.0.2
@@ -32,8 +39,34 @@ $CROSS_PREFIX-gcc -nostartfiles -T./boot.lds -Wl,-Map=$SHELL_FOLDER/output/lowle
 $CROSS_PREFIX-objcopy -O binary -S $SHELL_FOLDER/output/lowlevelboot/lowlevel_fw.elf $SHELL_FOLDER/output/lowlevelboot/lowlevel_fw.bin
 # 使用gnu工具生成反汇编文件，方便调试分析（当然我们这个代码太简单，不是很需要）
 $CROSS_PREFIX-objdump --source --demangle --disassemble --reloc --wide $SHELL_FOLDER/output/lowlevelboot/lowlevel_fw.elf > $SHELL_FOLDER/output/lowlevelboot/lowlevel_fw.lst
+echo "------------------------- 编译低级引导程序完成--------------------------------"
 
-cd $SHELL_FOLDER/output/lowlevelboot
+echo "------------------------- 编译 opensbi --------------------------------"
+if [ ! -d "$SHELL_FOLDER/output/opensbi" ]; then  
+mkdir $SHELL_FOLDER/output/opensbi
+fi  
+cd $SHELL_FOLDER/opensbi-1.2
+make CROSS_COMPILE=$CROSS_PREFIX- PLATFORM=quard_star
+cp -r $SHELL_FOLDER/opensbi-1.2/build/platform/quard_star/firmware/*.bin $SHELL_FOLDER/output/opensbi/
+echo "------------------------- 编译 opensbi 完成--------------------------------"
+
+echo "------------------------- 生成 sbi.dtb --------------------------------"
+cd $SHELL_FOLDER/dts
+dtc -I dts -O dtb -o $SHELL_FOLDER/output/opensbi/quard_star_sbi.dtb quard_star_sbi.dts
+echo "------------------------- 生成 sbi.dtb 完成--------------------------------"
+
+echo "------------------------- 生成最终固件 fw.bin --------------------------------"
+if [ ! -d "$SHELL_FOLDER/output/fw" ]; then  
+mkdir $SHELL_FOLDER/output/fw
+fi  
+cd $SHELL_FOLDER/output/fw
 rm -rf fw.bin
+# 生成一个 32MB 大小、全为 0 的空白固件文件
 dd of=fw.bin bs=1k count=32k if=/dev/zero
-dd of=fw.bin bs=1k conv=notrunc seek=0 if=lowlevel_fw.bin
+# # 写入 lowlevel_fw.bin 偏移量地址为 0
+dd of=fw.bin bs=1k conv=notrunc seek=0 if=$SHELL_FOLDER/output/lowlevelboot/lowlevel_fw.bin
+# 写入 quard_star_sbi.dtb 地址偏移量为 512K，因此 fdt的地址偏移量为 0x80000
+dd of=fw.bin bs=1k conv=notrunc seek=512 if=$SHELL_FOLDER/output/opensbi/quard_star_sbi.dtb
+# 写入 fw_jump.bin 地址偏移量为 2K*1K= 0x200000，因此 fw_jump.bin的地址偏移量为  0x200000
+dd of=fw.bin bs=1k conv=notrunc seek=2k if=$SHELL_FOLDER/output/opensbi/fw_jump.bin
+echo "------------------------- 生成最终固件 fw.bin 完成--------------------------------"

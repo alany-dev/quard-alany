@@ -49,7 +49,7 @@ static const MemMapEntry quard_star_memmap[] = {
     [QUARD_STAR_UART2] = {0x10002000,                                         0x100}, // UART2 串口
     [QUARD_STAR_RTC]   = {0x10003000,                                        0x1000}, // RTC 实时时钟
     [QUARD_STAR_FLASH] = {0x20000000,                                     0x2000000}, // Flash 存储
-    [QUARD_STAR_DRAM]  = {0x80000000,                                          0x80}, // DRAM 内存
+    [QUARD_STAR_DRAM]  = {0x80000000,                                    0x40000000}, // DRAM 内存
 };
 
 // 创建CPU
@@ -233,7 +233,7 @@ static void quard_star_aclint_create(MachineState *machine)
 static void quard_star_serial_create(MachineState *machine)
 {
     // RISCV CPU 访问外设和访问内存的方式是一样的，都是通过读写物理地址实现。
-    // 把 UART 设备的寄存器 挂载 到 系统全局内存空间中，这样 CPU 通过读写对应的物理地址就能访问 UART 了。 
+    // 把 UART 设备的寄存器 挂载 到 系统全局内存空间中，这样 CPU 通过读写对应的物理地址就能访问 UART 了。
     MemoryRegion *system_memory = get_system_memory();
     QuardStarState *s           = RISCV_VIRT_MACHINE(machine);
 

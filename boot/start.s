@@ -1,68 +1,73 @@
-.section .text             //定义数据段名为.text
-	.globl _start              //定义全局符号_start
-	.type _start,@function     //_start为函数
+.macro loop, cunt       // 定义宏，简单的 CPU 空转延时
+    li      t1, 0xffff  // t1 = 65535 (内层循环计数)
+    li      t2, \cunt   // t2 = 传入的参数 (外层循环计数)
+1:                      // 标签 1
+    nop
+    addi    t1, t1, -1  // t1 自减
+    bne     t1, x0, 1b  // 如果 t1 != 0，跳转回标签 1 (backward)
+    li      t1, 0xffff  // 重置内层循环
+    addi    t2, t2, -1  // t2 自减
+    bne     t2, x0, 1b  // 如果 t2 != 0，跳转回标签 1
+.endm
 
-_start:                        //函数入口
-    csrr    a0, mhartid        //csr是riscv专有的内核私有寄存器，独立编地在12位地址
-                               //mhartid寄存是定义了内核的hart id，这里读取到a0寄存器里
-    li		t0,	0x0            //li是伪指令，加载立即数0到t0
-	beq		a0, t0, _core0     //比较a0和t0,相等则跳转到_core0地址处，否则向下执行
-_loop:                         //定义一个_loop符号
-	j		_loop              //跳转到_loop，此处形成循环，用意为如果当前cpu core不为
-                               //hart 0则循环等待，为hart 0则继续向下执行
-_core0:                        //定义一个core0才能执行到此处
-	li		t0,	0x100          //t0 = 0x100
-	slli	t0,	t0, 20         //t0左移20位 t0 = 0x10000000
-	li		t1,	'H'            //t1 = 'H' 字符的ASCII码值写入t1
-	sb		t1, 0(t0)          //s是store写入的意思，b是byte，这里指的是写入t1
-                               //的值到t0指向的地址，即为写入0x10000000这个寄存器
-                               //这个寄存器正是uart0的发送data寄存器，此时串口会输出"H"
-	li		t1,	'e'            //接下来都是重复内容
-	sb		t1, 0(t0)
-	li		t1,	'l'
-	sb		t1, 0(t0)
-	li		t1,	'l'
-	sb		t1, 0(t0)
-	li		t1,	'o'
-	sb		t1, 0(t0)
-	li		t1,	' '
-	sb		t1, 0(t0)
-	li		t1,	'Q'
-	sb		t1, 0(t0)
-	li		t1,	'u'
-	sb		t1, 0(t0)
-	li		t1,	'a'
-	sb		t1, 0(t0)
-	li		t1,	'r'
-	sb		t1, 0(t0)
-	li		t1,	'd'
-	sb		t1, 0(t0)
-	li		t1,	' '
-	sb		t1, 0(t0)
-	li		t1,	'S'
-	sb		t1, 0(t0)
-	li		t1,	't'
-	sb		t1, 0(t0)
-	li		t1,	'a'
-	sb		t1, 0(t0)
-	li		t1,	'r'
-	sb		t1, 0(t0)
-	li		t1,	' '
-	sb		t1, 0(t0)
-	li		t1,	'b'
-	sb		t1, 0(t0)
-	li		t1,	'o'
-	sb		t1, 0(t0)
-	li		t1,	'a'
-	sb		t1, 0(t0)
-	li		t1,	'r'
-	sb		t1, 0(t0)
-	li		t1,	'd'
-	sb		t1, 0(t0)
-	li		t1,	'!'
-	sb		t1, 0(t0)
-	li		t1,	'\n'
-	sb		t1, 0(t0)          //到这里就会输出"Hello Quard Star board!"  
-	j		_loop              //完成后进入loop
+.macro load_data, _src_start, _dst_start, _dst_end  // memcpy 汇编版，把 Flash 数据拷贝到 RAM
+    bgeu    \_dst_start, \_dst_end, 2f  // 如果 目标起始 >= 目标结束，直接结束
+1:
+    lw      t0, (\_src_start)           // 从源地址加载一个字(4字节)到 t0
+    sw      t0, (\_dst_start)           // 把 t0 写入目标地址
+    addi    \_src_start, \_src_start, 4 // 源地址 + 4
+    addi    \_dst_start, \_dst_start, 4 // 目标地址 + 4
+    bltu    \_dst_start, \_dst_end, 1b  // 如果 目标当前 < 目标结束，继续循环
+2:
+.endm
 
-    .end                       //汇编文件结束符号
+	.section .text
+	.globl _start
+	.type _start,@function
+
+// 这是 CPU 上电后执行的第一段逻辑
+_start:
+    // 计算源地址 (Flash): 0x202 << 20 = 0x20200000
+    li      a0, 0x202
+    slli    a0, a0, 20      
+    // 计算目的地址 (DRAM): 0x800 << 20 = 0x80000000
+    li      a1, 0x800
+    slli    a1, a1, 20      
+    // 计算结束地址 (DRAM): 0x802 << 20 = 0x80200000 (拷贝大小 2MB)
+    li      a2, 0x802
+    slli    a2, a2, 20      
+    
+    // 执行拷贝：Flash(0x20200000) -> DRAM(0x80000000)
+    load_data a0,a1,a2
+
+    // 计算源地址 (Flash): 0x2008 << 16 = 0x20080000
+    li      a0, 0x2008
+    slli    a0, a0, 16       
+    // 计算目的地址 (DRAM): 0x822 << 20 = 0x82200000
+    li      a1, 0x822
+    slli    a1, a1, 20       
+    // 计算结束地址
+    li      a2, 0x8228
+    slli    a2, a2, 16       
+
+    // 执行拷贝：Flash(0x20080000) -> DRAM(0x82200000)
+    load_data a0,a1,a2
+
+    csrr    a0, mhartid         // 读取当前 CPU 核心 ID
+    li      t0, 0x0      
+    beq     a0, t0, _no_wait    // 如果是 0 号核 (主核)，直接跳转
+    loop    0x1000              // 如果是 从核，执行延时循环
+_no_wait:
+
+    // 准备参数 a1 = 设备树在内存中的地址 (OpenSBI 约定的传参规则)
+    li      a1, 0x822
+    slli    a1, a1, 20       // a1 = 0x82200000
+
+    // 准备跳转目标 t0 = OpenSBI 在内存中的入口地址
+    li      t0, 0x800
+    slli    t0, t0, 20       // t0 = 0x80000000
+    
+    // 跳过去！并将控制权移交给 OpenSBI
+    jr      t0
+
+.end

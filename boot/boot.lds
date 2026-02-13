@@ -1,17 +1,19 @@
-OUTPUT_ARCH( "riscv" )  /*输出可执行文件平台*/
+OUTPUT_ARCH( "riscv" )  /* 指定目标架构为 RISC-V */
+ENTRY( _start )         /* 指定程序的入口点标签为 _start */
 
-ENTRY( _start )         /*程序入口函数*/
-
-MEMORY                  /*定义内存域*/
+MEMORY                  /* 内存布局定义 */
 { 
-    /*定义名为flash的内存域属性以及起始地址，大小等*/
-	flash (rxai!w) : ORIGIN = 0x20000000, LENGTH = 512k 
+    /* 定义名为 flash 的区域：
+       ORIGIN = 0x20000000:这正是 QEMU pflash 的起始地址
+       LENGTH = 512k: 这个引导程序最大不能超过 512KB
+    */
+    flash (rxai!w) : ORIGIN = 0x20000000, LENGTH = 512k 
 }
 
-SECTIONS                /*定义段域*/
+SECTIONS                /* 段定义 */
 {
-  .text :               /*.text段域*/
+  .text :               /* 代码段 */
   {
-    KEEP(*(.text))      /*将所有.text段链接在此域内，keep是保持防止优化，即无论如何都保留此段*/
-  } >flash              /*段域的地址(LMA和VMA相同)位于名为flash内存域*/
+    KEEP(*(.text))      /* 强制保留所有代码，防止被链接器优化掉 */
+  } >flash              /* 将代码段放入上面定义的 flash 区域 */
 }
