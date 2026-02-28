@@ -145,7 +145,7 @@ SBI 通过 `ecall` 触发。调用约定（来自 SBI 规范）是：
 
 1. 拷贝 OpenSBI 二进制到 DRAM `0x80000000`
 2. 拷贝 DTB 到 DRAM `0x82200000`
-3. 设置 `a1=0x82200000`（传给 OpenSBI 当 FDT）
+3. 设置 `a1=0x82200000`（传给 OpenSBI 当 FDT（DTB 是 FDT 的二进制文件形态，FDT 是这套硬件描述体系的通用名称））
 4. 跳转到 `0x80000000`
 
 关键行：`boot/start.s:31` 到 `boot/start.s:58`
@@ -154,6 +154,8 @@ SBI 通过 `ecall` 触发。调用约定（来自 SBI 规范）是：
 
 `fw_jump` 入口在 `fw_base.S` 的 `_start`。  
 你虽然把它“加载到 `0x80000000`”，但它会按链接地址与重定位逻辑运行，最终在 `0xBFF8xxxx` 区间执行（和 `FW_TEXT_START=0xBFF80000` 对齐）。
+
+> 你 lowlevel 引导程序把 fw_jump.bin 从 Flash 拷贝到 DRAM 0x80000000，但 OpenSBI 编译时链接到 0xBFF80000—— 这时候 OpenSBI 会自动做重定位（Relocation），把自身代码从 0x80000000 复制到 0xBFF80000 后再执行，确保和链接地址一致。
 
 关键文件：
 - `opensbi-1.2/firmware/fw_base.S:49`（`_start`）

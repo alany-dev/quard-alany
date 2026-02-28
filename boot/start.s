@@ -53,6 +53,16 @@ _start:
     // 执行拷贝：Flash(0x20080000) -> DRAM(0x82200000)
     load_data a0,a1,a2
 
+    //load trusted_fw.bin
+	//[0x20400000:0x20800000] --> [0xb0000000:0xb0400000]
+    li		a0,	0x204
+	slli	a0,	a0, 20      //a0 = 0x20400000
+    li		a1,	0xb00
+	slli	a1,	a1, 20      //a1 = 0xb0000000
+    li		a2,	0xb04
+	slli	a2,	a2, 20      //a2 = 0xb0400000
+	load_data a0,a1,a2
+
     csrr    a0, mhartid         // 读取当前 CPU 核心 ID
     li      t0, 0x0      
     beq     a0, t0, _no_wait    // 如果是 0 号核 (主核)，直接跳转

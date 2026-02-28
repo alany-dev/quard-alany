@@ -6,8 +6,8 @@
 # 依赖安装
 sudo apt update && sudo apt install ninja-build pkg-config libglib2.0-dev libpixman-1-dev libgtk-3-dev libcap-ng-dev libattr1-dev libsdl2-dev device-tree-compiler bison flex gperf intltool mtd-utils libslirp-dev -y
 
-# 无图形化界面 qemu 编译/运行
-sudo ./build.sh  # 编译
+# 编译/运行
+./build.sh  # 编译
 ./run.sh    # 运行
 ```
 
