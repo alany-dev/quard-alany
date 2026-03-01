@@ -64,6 +64,16 @@ $CROSS_PREFIX-objcopy -O binary -S $SHELL_FOLDER/output/trusted_domain/trusted_f
 $CROSS_PREFIX-objdump --source --demangle --disassemble --reloc --wide $SHELL_FOLDER/output/trusted_domain/trusted_fw.elf > $SHELL_FOLDER/output/trusted_domain/trusted_fw.lst
 echo "------------------------- 生成 trusted_fw.bin 完成 -------------------------"
 
+echo "------------------------- 编译 os -------------------------"
+if [ ! -d "$SHELL_FOLDER/output/os" ]; then  
+mkdir $SHELL_FOLDER/output/os
+fi
+cd $SHELL_FOLDER/os
+make
+cp $SHELL_FOLDER/os/os.bin $SHELL_FOLDER/output/os/os.bin
+make clean
+echo "------------------------- 生成 os.bin 完成 -------------------------"
+
 echo "------------------------- 生成最终固件 fw.bin -------------------------"
 if [ ! -d "$SHELL_FOLDER/output/fw" ]; then  
 mkdir $SHELL_FOLDER/output/fw
@@ -81,4 +91,6 @@ dd of=fw.bin bs=1k conv=notrunc seek=512 if=$SHELL_FOLDER/output/opensbi/quard_s
 dd of=fw.bin bs=1k conv=notrunc seek=2k if=$SHELL_FOLDER/output/opensbi/fw_jump.bin
 # 写入 trusted_fw.bin 地址偏移量为 1K*4K= 0x400000，因此 trusted_fw.bin的地址偏移量为  0x400000
 dd of=fw.bin bs=1k conv=notrunc seek=4K if=$SHELL_FOLDER/output/trusted_domain/trusted_fw.bin
+# os.bin 地址偏移量 0x800000
+dd of=fw.bin bs=1k conv=notrunc seek=8K if=$SHELL_FOLDER/output/os/os.bin
 echo "------------------------- 生成最终固件 fw.bin 完成 -------------------------"

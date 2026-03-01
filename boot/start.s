@@ -27,40 +27,44 @@
 
 // 这是 CPU 上电后执行的第一段逻辑
 _start:
-    // 计算源地址 (Flash): 0x202 << 20 = 0x20200000
-    li      a0, 0x202
-    slli    a0, a0, 20      
-    // 计算目的地址 (DRAM): 0x800 << 20 = 0x80000000
-    li      a1, 0x800
-    slli    a1, a1, 20      
-    // 计算结束地址 (DRAM): 0x802 << 20 = 0x80200000 (拷贝大小 2MB)
-    li      a2, 0x802
-    slli    a2, a2, 20      
-    
-    // 执行拷贝：Flash(0x20200000) -> DRAM(0x80000000)
-    load_data a0,a1,a2
+    // load opensbi_fw.bin 
+	// [0x20200000:0x20400000] --> [0x80000000:0x80200000]
+    li		a0,	0x202
+	slli	a0,	a0, 20      //a0 = 0x20200000
+    li		a1,	0x800
+	slli	a1,	a1, 20      //a1 = 0x80000000
+    li		a2,	0x802
+	slli	a2,	a2, 20      //a2 = 0x80200000
+	load_data a0,a1,a2
 
-    // 计算源地址 (Flash): 0x2008 << 16 = 0x20080000
-    li      a0, 0x2008
-    slli    a0, a0, 16       
-    // 计算目的地址 (DRAM): 0x822 << 20 = 0x82200000
-    li      a1, 0x822
-    slli    a1, a1, 20       
-    // 计算结束地址
-    li      a2, 0x8228
-    slli    a2, a2, 16       
+	// load qemu_sbi.dtb
+	// [0x20080000:0x20100000] --> [0x82200000:0x82280000]
+    li		a0,	0x2008
+	slli	a0,	a0, 16       //a0 = 0x20080000
+    li		a1,	0x822
+	slli	a1,	a1, 20       //a1 = 0x82200000
+    li		a2,	0x8228
+	slli	a2,	a2, 16       //a2 = 0x82280000
+	load_data a0,a1,a2
 
-    // 执行拷贝：Flash(0x20080000) -> DRAM(0x82200000)
-    load_data a0,a1,a2
-
-    //load trusted_fw.bin
-	//[0x20400000:0x20800000] --> [0xb0000000:0xb0400000]
+	// load trusted_fw.bin
+	// [0x20400000:0x20800000] --> [0xb0000000:0xb0400000]
     li		a0,	0x204
 	slli	a0,	a0, 20      //a0 = 0x20400000
     li		a1,	0xb00
 	slli	a1,	a1, 20      //a1 = 0xb0000000
     li		a2,	0xb04
 	slli	a2,	a2, 20      //a2 = 0xb0400000
+	load_data a0,a1,a2
+
+	// load os.bin
+	// [0x20800000:0x20C00000] --> [0x80200000:0x80600000]
+    li		a0,	0x208
+	slli	a0,	a0, 20      //a0 = 0x20800000
+    li		a1,	0x802
+	slli	a1,	a1, 20      //a1 = 0x80200000
+    li		a2,	0x806
+	slli	a2,	a2, 20      //a2 = 0x80600000
 	load_data a0,a1,a2
 
     csrr    a0, mhartid         // 读取当前 CPU 核心 ID
