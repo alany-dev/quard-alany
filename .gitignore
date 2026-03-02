@@ -1,5 +1,6 @@
 .vscode
 output
+os/os.map
 tests/va_list/*.out
 tests/va_list/*.txt
 tests/syscall/*.out
