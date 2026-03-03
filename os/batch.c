@@ -2,6 +2,7 @@
 #include "os.h"
 #include "context.h"
 #include "types.h"
+#include "string.h"
 
 #define USER_STACK_SIZE   (4096 * 2)
 #define KERNEL_STACK_SIZE (4096 * 2)
@@ -25,10 +26,17 @@ size_t syscall(size_t id, reg_t arg1, reg_t arg2, reg_t arg3)
     return ret;
 }
 
+// U 模式执行的任务
 void testsys()
 {
-    syscall(2, 3, 4, 5);
+    // syscall(2, 3, 4, 5);
     // syscall(3, 4, 5, 6);
+    const char *message = "Hello, RISC-V!\n";
+    int len             = strlen(message);
+    int ret             = syscall(0x40, 1, (reg_t)message, (reg_t)len);
+    while (1) {
+        /* code */
+    }
 }
 
 struct pt_regs tasks; // 保存 / 初始化用户任务（U 模式程序）执行所需的上下文信息

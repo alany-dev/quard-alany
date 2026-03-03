@@ -16,6 +16,7 @@ SRCS_C = \
 	printf.c \
 	batch.c \
 	trap.c \
+	syscall.c \
 	main.c
 
 # 将源文件替换为 .o 文件
